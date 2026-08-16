@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * Discovers the active local Wi-Fi / Ethernet IPv4 address
  */
-export function getLocalIpAddress(): string {
+function getLocalIpAddress(): string {
   const nets = networkInterfaces();
   const candidates: string[] = [];
 

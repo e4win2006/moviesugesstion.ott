@@ -54,17 +54,35 @@ export async function getMediaFolderSettings(): Promise<MediaFolderSettings> {
     // Prisma table may not exist yet, fallback gracefully
   }
 
-  // Fallback defaults if still empty
-  if (!moviesDir) {
-    const userHome = process.env.USERPROFILE || process.env.HOME || "C:/Users";
-    const defaultVideos = join(userHome, "Videos").replace(/\\/g, "/");
-    if (existsSync(defaultVideos)) moviesDir = defaultVideos;
+  // Fallback defaults if still empty or not on disk
+  const defaultMusicUploadDir = join(DATA_DIR, "uploads", "music").replace(/\\/g, "/");
+  const defaultMoviesUploadDir = join(DATA_DIR, "uploads", "movies").replace(/\\/g, "/");
+
+  if (!existsSync(defaultMusicUploadDir)) {
+    try { mkdirSync(defaultMusicUploadDir, { recursive: true }); } catch {}
+  }
+  if (!existsSync(defaultMoviesUploadDir)) {
+    try { mkdirSync(defaultMoviesUploadDir, { recursive: true }); } catch {}
   }
 
-  if (!musicDir) {
+  if (!moviesDir || !existsSync(moviesDir)) {
+    const userHome = process.env.USERPROFILE || process.env.HOME || "C:/Users";
+    const defaultVideos = join(userHome, "Videos").replace(/\\/g, "/");
+    if (existsSync(defaultVideos)) {
+      moviesDir = defaultVideos;
+    } else {
+      moviesDir = defaultMoviesUploadDir;
+    }
+  }
+
+  if (!musicDir || !existsSync(musicDir)) {
     const userHome = process.env.USERPROFILE || process.env.HOME || "C:/Users";
     const defaultMusic = join(userHome, "Music").replace(/\\/g, "/");
-    if (existsSync(defaultMusic)) musicDir = defaultMusic;
+    if (existsSync(defaultMusic)) {
+      musicDir = defaultMusic;
+    } else {
+      musicDir = defaultMusicUploadDir;
+    }
   }
 
   // Sync to runtime process.env
@@ -75,6 +93,14 @@ export async function getMediaFolderSettings(): Promise<MediaFolderSettings> {
     moviesDir,
     musicDir,
   };
+}
+
+export function getUploadDir(type: "movies" | "music"): string {
+  const dir = join(DATA_DIR, "uploads", type).replace(/\\/g, "/");
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  return dir;
 }
 
 /**

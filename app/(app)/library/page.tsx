@@ -16,11 +16,12 @@ import {
   AlertTriangle, BrainCircuit, Check, CheckCircle2, ChevronRight, Copy, ExternalLink,
   Film, Folder, FolderOpen, HardDrive, Heart, Info, Laptop, Loader2, Music,
   Play, Plus, QrCode, Radio, RefreshCw, Save, Search, Shuffle, SlidersHorizontal,
-  Smartphone, Sparkles, Star, Tv, Upload, Wifi, X, Zap,
+  Smartphone, Sparkles, Star, Trash2, Tv, Upload, Wifi, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LocalVideoPlayer } from "@/components/local-video-player";
 import { LocalMusicPlayer } from "@/components/local-music-player";
+import { MusicUploadModal } from "@/components/music-upload-modal";
 import type { MediaFile } from "@/lib/media-types";
 import { formatBytes } from "@/lib/media-types";
 
@@ -216,6 +217,7 @@ function MusicRow({
   isCurrent,
   onClick,
   onNeuralSimilar,
+  onDelete,
 }: {
   file: MediaFile;
   index: number;
@@ -223,6 +225,7 @@ function MusicRow({
   isCurrent: boolean;
   onClick: () => void;
   onNeuralSimilar: (e: React.MouseEvent) => void;
+  onDelete?: (e: React.MouseEvent) => void;
 }) {
   const meta = file.metadata;
   const poster = meta?.posterUrl;
@@ -322,6 +325,17 @@ function MusicRow({
       >
         <Heart size={14} fill={liked ? "currentColor" : "none"} />
       </button>
+
+      {/* Delete Song from Library */}
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="p-1.5 transition active:scale-90 text-zinc-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 shrink-0"
+          title="Delete from Library"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
     </div>
   );
 }
@@ -363,6 +377,7 @@ export default function LibraryPage() {
   const [musicOpen, setMusicOpen] = useState(false);
   const [playingIdx, setPlayingIdx] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showMusicUploadModal, setShowMusicUploadModal] = useState(false);
 
   // IMDb & Web Metadata Search Modal State
   const [showImdbModal, setShowImdbModal] = useState(false);
@@ -646,6 +661,52 @@ export default function LibraryPage() {
     }
   };
 
+  // ── Handle Upload Success & Auto-play ──────────────────────────────────
+  const handleUploadSuccess = (newFiles: MediaFile[]) => {
+    fetchConfig();
+    fetchFiles(tab, currentFolderPath || undefined);
+    setFeedbackMsg({
+      type: "success",
+      text: `✓ Stored and added ${newFiles.length} song(s) to your persistent library!`,
+    });
+    if (newFiles.length > 0 && !musicOpen) {
+      setMusicQueue(newFiles);
+      setMusicStart(0);
+      setMusicOpen(true);
+      setPlayingIdx(0);
+      setIsPlaying(true);
+    }
+  };
+
+  // ── Handle Deleting a File ─────────────────────────────────────────────
+  const handleDeleteSong = async (file: MediaFile, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!confirm(`Delete "${file.metadata?.cleanTitle || file.name}" from library storage?`)) return;
+    try {
+      const res = await fetch(`/api/media/files?id=${encodeURIComponent(file.id)}`, {
+        method: "DELETE",
+      });
+      const resJson = await res.json();
+      if (res.ok && resJson.success) {
+        setFeedbackMsg({
+          type: "success",
+          text: `Deleted "${file.name}"`,
+        });
+        fetchFiles(tab, currentFolderPath || undefined);
+      } else {
+        setFeedbackMsg({
+          type: "error",
+          text: resJson.error || "Failed to delete file",
+        });
+      }
+    } catch {
+      setFeedbackMsg({
+        type: "error",
+        text: "Failed to delete file",
+      });
+    }
+  };
+
   // ── Combine server and client files ─────────────────────────────────────
   const allFiles = [
     ...deviceFiles.filter((f) => (tab === "movies" ? f.mediaType === "video" : f.mediaType === "audio")),
@@ -776,6 +837,16 @@ export default function LibraryPage() {
           </div>
 
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
+            {/* Upload Music Button */}
+            <button
+              onClick={() => setShowMusicUploadModal(true)}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-[#1db954]/40 bg-[#1db954]/20 px-3.5 sm:px-4 py-2.5 text-xs font-black text-[#1db954] hover:bg-[#1db954]/30 hover:scale-105 transition shadow-lg shadow-[#1db954]/15 active:scale-95"
+              title="Upload songs & audio to store permanently in library"
+            >
+              <Upload size={15} />
+              <span className="truncate">Upload Music</span>
+            </button>
+
             {/* Search IMDb / Music Metadata */}
             <button
               onClick={() => {
@@ -984,7 +1055,15 @@ export default function LibraryPage() {
                 <p className="text-sm font-semibold text-zinc-300">
                   {search ? `No metadata match for "${search}"` : `No ${tab} files found in this folder`}
                 </p>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                  {tab === "music" ? (
+                    <button
+                      onClick={() => setShowMusicUploadModal(true)}
+                      className="flex items-center gap-1.5 rounded-xl bg-[#1db954] px-5 py-2 text-xs font-black text-ink hover:opacity-90 transition shadow-lg shadow-[#1db954]/20"
+                    >
+                      <Upload size={14} /> Upload Music Files
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => {
                       setPendingSelection(null);
@@ -992,7 +1071,7 @@ export default function LibraryPage() {
                     }}
                     className="flex items-center gap-1.5 rounded-xl bg-lime px-4 py-2 text-xs font-bold text-ink hover:opacity-90"
                   >
-                    <FolderOpen size={14} /> Choose Movies Folder
+                    <FolderOpen size={14} /> {tab === "movies" ? "Choose Movies Folder" : "Choose Music Folder"}
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -1043,6 +1122,7 @@ export default function LibraryPage() {
                             e.stopPropagation();
                             openMusic(f);
                           }}
+                          onDelete={(e) => handleDeleteSong(f, e)}
                         />
                       ))}
                     </div>
@@ -1113,6 +1193,15 @@ export default function LibraryPage() {
                           <span>✨ AI Neural Mix</span>
                         </button>
                       )}
+
+                      {/* Direct Upload Button */}
+                      <button
+                        onClick={() => setShowMusicUploadModal(true)}
+                        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 hover:bg-white/20 px-5 py-3 text-xs font-bold text-white transition active:scale-95"
+                      >
+                        <Upload size={14} />
+                        <span>Upload Tracks</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1141,6 +1230,7 @@ export default function LibraryPage() {
                         e.stopPropagation();
                         openMusic(f);
                       }}
+                      onDelete={(e) => handleDeleteSong(f, e)}
                     />
                   ))}
                 </div>
@@ -1514,6 +1604,14 @@ export default function LibraryPage() {
           </div>
         </div>
       )}
+
+      {/* ── Music Upload Modal (Persistent Server Storage & Instant Playback) ── */}
+      <MusicUploadModal
+        isOpen={showMusicUploadModal}
+        onClose={() => setShowMusicUploadModal(false)}
+        onUploadSuccess={handleUploadSuccess}
+        targetDir={currentFolderPath}
+      />
     </>
   );
 }
