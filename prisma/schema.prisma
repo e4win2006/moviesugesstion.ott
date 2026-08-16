@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MediaType {
+  MOVIE
+  TV
+}
+
+enum WatchStatus {
+  NOT_WATCHED
+  WATCHING
+  WATCHED
+}
+
+enum FeedbackType {
+  LIKE
+  DISLIKE
+  FAVORITE
+}
+
+enum ExclusionType {
+  HIDDEN
+  REJECTED
+}
+
+model Profile {
+  id                     String       @id @default(cuid())
+  name                   String       @default("Edwin")
+  preferredLanguages     String[]     @default(["en", "ml"])
+  excludedLanguages      String[]     @default(["hi"])
+  favoriteGenres         String[]
+  preferredWatchProviders String[]     @default(["JioHotstar", "Hotstar", "JioCinema"])
+  recommendationAccuracy Float        @default(0)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  watchEntries           WatchEntry[]
+  feedback               Feedback[]
+  exclusions             Exclusion[]
+}
+
+model Title {
+  id                  String       @id @default(cuid())
+  tmdbId              Int
+  imdbId              String?
+  type                MediaType
+  title               String
+  originalTitle       String?
+  overview            String?
+  year                Int?
+  language            String
+  posterPath          String?
+  backdropPath        String?
+  trailerUrl          String?
+  runtimeMinutes      Int?
+  numberOfSeasons     Int?
+  completedSeries     Boolean      @default(false)
+  imdbRating          Float?
+  rottenTomatoesScore Int?
+  tmdbRating          Float?
+  popularity          Float        @default(0)
+  genres              String[]
+  keywords            String[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  watchEntries        WatchEntry[]
+  feedback            Feedback[]
+  exclusions          Exclusion[]
+
+  @@unique([tmdbId, type])
+  @@index([type, language])
+  @@index([title])
+}
+
+model WatchEntry {
+  id              String      @id @default(cuid())
+  profileId       String
+  titleId         String
+  status          WatchStatus @default(WATCHED)
+  dateWatched     DateTime?
+  seasonsWatched  Int         @default(0)
+  episodesWatched Int         @default(0)
+  minutesWatched  Int?
+  source          String      @default("manual")
+  rating           Int?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  profile          Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title            Title       @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, titleId])
+  @@index([profileId, status])
+}
+
+model Feedback {
+  id        String       @id @default(cuid())
+  profileId String
+  titleId   String
+  type      FeedbackType
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  profile   Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title     Title        @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, titleId])
+}
+
+model Exclusion {
+  id        String        @id @default(cuid())
+  profileId String
+  titleId   String
+  type      ExclusionType
+  createdAt DateTime      @default(now())
+  profile   Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title     Title         @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, titleId])
+}
